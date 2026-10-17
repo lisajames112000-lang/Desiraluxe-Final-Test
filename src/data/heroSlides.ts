@@ -1,0 +1,78 @@
+import type { HeroSlide } from '../types/settings';
+
+export const heroSlides: HeroSlide[] = [
+{
+  id: 'hero_luxury_watches',
+  order: 1,
+  eyebrow: 'Swiss Haute Horlogerie',
+  headline: 'Time, masterfully crafted.',
+  subheadline: 'Imported Swiss automatics, tourbillons, and diamond-set icons — authenticated and delivered across Pakistan.',
+  ctaLabel: 'Shop Luxury Watches',
+  ctaHref: '/category/luxury-watches',
+  image: "/2e1c5265-5220-4fd5-afe2-3a6870dd61bb.jpg",
+  focalPoint: '70% center',
+  overlayStrength: 0.35,
+  textAlign: 'left',
+  theme: 'dark',
+  isVisible: true
+},
+{
+  id: 'hero_couture',
+  order: 2,
+  eyebrow: 'The Couture Edit',
+  headline: 'Evenings, unforgettable.',
+  subheadline: 'Silk gowns, hand-beaded cocktail dresses, and bridal lace imported from Milan, Paris, and Beirut.',
+  ctaLabel: 'Discover Designer Dresses',
+  ctaHref: '/category/designer-dresses',
+  image: "/caf4a33e-8834-4674-9e57-a3cd9320362b.jpg",
+  focalPoint: '70% center',
+  overlayStrength: 0.45,
+  textAlign: 'left',
+  theme: 'dark',
+  isVisible: true
+},
+{
+  id: 'hero_perfumes',
+  order: 3,
+  eyebrow: 'Maison de Parfum',
+  headline: 'Signature scents, genuinely imported.',
+  subheadline: 'Dior, Chanel, Creed, Tom Ford, and YSL — sealed, batch-coded originals for every occasion.',
+  ctaLabel: 'Shop Luxury Perfumes',
+  ctaHref: '/category/luxury-perfumes',
+  image: "/31fa4ff6-b029-45f4-bd4c-b34721462880.jpg",
+  focalPoint: '70% center',
+  overlayStrength: 0.35,
+  textAlign: 'left',
+  theme: 'dark',
+  isVisible: true
+},
+{
+  id: 'hero_eyewear',
+  order: 4,
+  eyebrow: 'Designer Eyewear',
+  headline: 'See the world in style.',
+  subheadline: 'Ray-Ban, Gucci, Prada, Cartier, and Persol frames with full UV protection and authenticity cards.',
+  ctaLabel: 'Explore Eyewear',
+  ctaHref: '/category/designer-eyewear',
+  image: "/c7f44f1d-c36b-4107-9fbb-1fccdaf80b4e.jpg",
+  focalPoint: '70% center',
+  overlayStrength: 0.5,
+  textAlign: 'left',
+  theme: 'dark',
+  isVisible: true
+},
+{
+  id: 'hero_luxury_living',
+  order: 5,
+  eyebrow: 'Luxury Living',
+  headline: 'Rooms worth coming home to.',
+  subheadline: 'Crystal chandeliers, Persian silk, Calacatta marble, and café-grade machines for the modern home.',
+  ctaLabel: 'Explore Home Décor',
+  ctaHref: '/category/luxury-home-decor',
+  image: "/8eab5d05-b260-4285-9c73-10cefd03f18f.jpg",
+  focalPoint: '65% center',
+  overlayStrength: 0.45,
+  textAlign: 'left',
+  theme: 'dark',
+  isVisible: true
+}];

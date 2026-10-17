@@ -1,0 +1,10 @@
+import React from 'react';
+import { Container, Text, Title } from '@mantine/core';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
+import { BreadcrumbsNav } from '../components/common/BreadcrumbsNav';
+import { ImageWithFallback } from '../components/common/ImageWithFallback';
+
+export function About() {
+  useDocumentMeta('About Desiraluxe', 'Discover the idea behind the Desiraluxe premium multi-category shopping preview.');
+  return <main className="py-10 sm:py-16"><Container size={1200}><BreadcrumbsNav items={[{ label: 'Home', href: '/' }, { label: 'About' }]} /><div className="grid items-center gap-10 lg:grid-cols-2"><div><Text size="xs" tt="uppercase" fw={700} c="emerald.6" lts="0.16em">More than shopping</Text><Title order={1} mt={8} className="!text-4xl sm:!text-6xl">A calmer way to discover beautiful things.</Title><Text c="dimmed" lh={1.8} mt="xl">Desiraluxe is an original premium multi-category shopping concept designed around clear discovery, thoughtful merchandising, and a reassuring checkout experience.</Text><Text c="dimmed" lh={1.8} mt="md">Our curated collection brings together imported luxury across twelve categories — from Swiss watches, designer dresses, and brand perfumes to designer eyewear, fine jewellery, premium electronics, home machines, power tools, and imported toys.</Text><div className="mt-8 rounded-2xl border border-line bg-sage p-5 text-sm leading-7"><strong>Production boundary:</strong> real commerce requires secure owner authentication, a server database, atomic inventory and order writes, authorized private media storage, and configured payment instructions or a genuine gateway.</div></div><ImageWithFallback src="/382fdd5d-0b78-4896-8c53-677e34d1a596.jpg" alt="Notebook, eucalyptus, tea, and linen in calm natural light" width={1024} height={768} className="w-full rounded-[2rem] object-cover shadow-soft" containerClassName="aspect-[4/3] rounded-[2rem]" /></div></Container></main>;
+}
