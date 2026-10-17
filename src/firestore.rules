@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Browsers never write directly. Every change goes through the server API,
+    // which uses the Firebase Admin SDK (Admin SDK access is not governed by these rules).
+    function signedIn() { return request.auth != null; }
+    function isAdmin() { return signedIn() && request.auth.token.admin == true; }
+
+    // Public storefront content: visitors see only published/visible/enabled records.
+    match /products/{id} {
+      allow read: if resource.data.isPublished == true || isAdmin();
+      allow write: if false;
+    }
+    match /categories/{id} {
+      allow read: if resource.data.isPublished == true || isAdmin();
+      allow write: if false;
+    }
+    match /heroSlides/{id} {
+      allow read: if resource.data.isVisible == true || isAdmin();
+      allow write: if false;
+    }
+    match /popups/{id} {
+      allow read: if resource.data.isEnabled == true || isAdmin();
+      allow write: if false;
+    }
+    match /cmsPages/{id} {
+      allow read: if resource.data.isPublished == true || isAdmin();
+      allow write: if false;
+    }
+    match /paymentMethodsPublic/{id} {
+      allow read: if resource.data.enabled == true || isAdmin();
+      allow write: if false;
+    }
+    match /siteSettings/public { allow read: if true; allow write: if false; }
+
+    // Admin-only reads (signed-in account with the admin custom claim).
+    match /siteSettings/private { allow read: if isAdmin(); allow write: if false; }
+    match /productPrivate/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /paymentMethodsPrivate/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /orders/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /contactMessages/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /media/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /inventoryMovements/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /refundLedger/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /accountingPeriods/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /auditLogs/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /system/{id} { allow read: if isAdmin(); allow write: if false; }
+
+    // Server-only: no browser access at all, including admins.
+    match /orderAccess/{id} { allow read, write: if false; }
+    match /uniqueKeys/{id} { allow read, write: if false; }
+    match /rateLimits/{id} { allow read, write: if false; }
+
+    // Anything not listed above is denied.
+    match /{document=**} { allow read, write: if false; }
+  }
+}
