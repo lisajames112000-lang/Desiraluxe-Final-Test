@@ -6,7 +6,7 @@ import { useStore } from '../../contexts/StoreContext';
 import { Logo } from '../brand/Logo';
 
 const groups = [
-{ title: 'Quick links', links: [['Home', '/'], ['About us', '/about'], ['Contact', '/contact'], ['Owner admin', '/admin']] },
+{ title: 'Quick links', links: [['Home', '/'], ['About us', '/about'], ['Contact', '/contact']] },
 { title: 'Shop', links: [['All products', '/shop'], ['Categories', '/categories'], ['New arrivals', '/shop?sort=newest'], ['Featured', '/shop?sort=featured']] },
 { title: 'Customer care', links: [['Shipping', '/shipping'], ['Returns & exchanges', '/returns'], ['Track order', '/track-order'], ['Privacy', '/privacy'], ['Terms', '/terms']] }];
 
