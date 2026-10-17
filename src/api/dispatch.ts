@@ -1,3 +1,4 @@
+import receiptHandler from './orders/receipt.js';
 import handler0 from './admin/accounting/periods.js';
 import handler1 from './admin/bootstrap.js';
 import handler2 from './admin/content/delete.js';
@@ -45,6 +46,7 @@ const handlers: Record<string, Handler> = {
   'media/delete': handler17,
   'media/sign-upload': handler18,
   'orders/create': handler19,
+  'orders/receipt': receiptHandler,
   'orders/track': handler20,
   'sitemap': handler21
 };

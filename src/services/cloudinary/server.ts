@@ -103,9 +103,10 @@ export function managedMediaIdFromUrl(url: string): string | null {
   return url.match(pattern)?.[1] ?? null;
 }
 
-export function createSignedUpload(input: {publicId: string;resourceType: CloudinaryResourceType;allowedFormats: string[];}): SignedCloudinaryUpload {
+export function createSignedUpload(input: {publicId: string;resourceType: CloudinaryResourceType;allowedFormats: string[];deliveryType?: 'authenticated';}): SignedCloudinaryUpload {
   const config = requireConfig();
   const params = {
+    ...(input.deliveryType ? { type: input.deliveryType } : {}),
     allowed_formats: input.allowedFormats.join(','),
     overwrite: 'false',
     public_id: input.publicId,
@@ -127,11 +128,11 @@ export function verifyUploadResponseSignature(publicId: string, version: number,
 }
 
 /** Reads authoritative asset metadata from the Cloudinary Admin API. Returns null when the asset does not exist. */
-export async function fetchResource(publicId: string, resourceType: CloudinaryResourceType): Promise<CloudinaryResource | null> {
+export async function fetchResource(publicId: string, resourceType: CloudinaryResourceType, deliveryType = 'upload'): Promise<CloudinaryResource | null> {
   const config = requireConfig();
   const path = publicId.split('/').map(encodeURIComponent).join('/');
   const authorization = Buffer.from(`${config.apiKey}:${config.apiSecret}`).toString('base64');
-  const response = await fetch(`${API_ORIGIN}/${config.cloudName}/resources/${resourceType}/upload/${path}`, {
+  const response = await fetch(`${API_ORIGIN}/${config.cloudName}/resources/${resourceType}/${deliveryType}/${path}`, {
     headers: { Authorization: `Basic ${authorization}` },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
   });
@@ -173,4 +174,9 @@ export async function destroyAsset(publicId: string, resourceType: CloudinaryRes
 
 export function resourceTypeFor(value: unknown): CloudinaryResourceType {
   return value === 'video' ? 'video' : 'image';
+}
+export function receiptDownloadUrl(publicId: string, format: string): string {
+ const config = requireConfig();
+ const params = { public_id: publicId, format, type: 'authenticated', expires_at: String(Math.floor(Date.now()/1000)+60), attachment: 'false' };
+ return `${API_ORIGIN}/${config.cloudName}/image/download?${new URLSearchParams({...params, api_key:config.apiKey, signature:cloudinarySignature(params,config.apiSecret,config.algorithm)})}`;
 }

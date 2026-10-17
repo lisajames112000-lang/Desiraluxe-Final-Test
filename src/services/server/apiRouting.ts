@@ -20,6 +20,7 @@ export const apiRoutePaths = [
   "media/delete",
   "media/sign-upload",
   "orders/create",
+  "orders/receipt",
   "orders/track",
   "sitemap"
 ] as const;

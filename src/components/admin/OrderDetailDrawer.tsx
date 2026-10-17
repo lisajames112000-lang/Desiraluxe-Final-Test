@@ -1,3 +1,4 @@
+import { ReceiptViewer } from './ReceiptViewer';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Badge, Button, Divider, Drawer, Group, NumberInput, Select, Stack, Text, TextInput, Textarea, Title } from '@mantine/core';
 import { MessageCircleIcon, SparklesIcon } from 'lucide-react';
@@ -12,7 +13,7 @@ export function OrderDetailDrawer({ order, onClose }: {order: Order | null;onClo
   const [carrier, setCarrier] = useState('');const [trackingId, setTrackingId] = useState('');const [trackingUrl, setTrackingUrl] = useState('');const [statusNote, setStatusNote] = useState('');const [notes, setNotes] = useState('');const [refundAmount, setRefundAmount] = useState<number | ''>('');const [refundReference, setRefundReference] = useState('');const [refundNote, setRefundNote] = useState('');const [refundRequestId, setRefundRequestId] = useState(() => crypto.randomUUID());const [feedback, setFeedback] = useState<{ok: boolean;message: string;} | null>(null);const [saving, setSaving] = useState(false);
   useEffect(() => {setCarrier(order?.tracking?.carrier || '');setTrackingId(order?.tracking?.trackingId || '');setTrackingUrl(order?.tracking?.trackingUrl || '');setStatusNote(order?.tracking?.statusNote || '');setNotes(order?.internalNotes || '');setRefundAmount('');setRefundReference('');setRefundNote('');setRefundRequestId(crypto.randomUUID());setFeedback(null);}, [order?.id]);
   const paymentOptions = useMemo(() => order ? (['awaiting_proof', 'under_review', 'approved', 'rejected', 'refund_required'] as PaymentState[]).filter((state) => canTransitionPayment(order.paymentState, state)).map((state) => ({ value: state, label: state.replace('_', ' ') })) : [], [order]);
-  const fulfillmentOptions = useMemo(() => order ? (['pending', 'processing', 'dispatched', 'in_transit', 'delivered', 'cancelled'] as FulfillmentState[]).filter((state) => canTransitionFulfillment(order.fulfillmentState, state) && (order.paymentState === 'approved' || !['dispatched', 'in_transit', 'delivered'].includes(state))).map((state) => ({ value: state, label: state.replace('_', ' ') })) : [], [order]);
+  const fulfillmentOptions = useMemo(() => order ? (['pending', 'processing', 'dispatched', 'in_transit', 'delivered', 'cancelled'] as FulfillmentState[]).filter((state) => canTransitionFulfillment(order.fulfillmentState, state) && (order.paymentState === 'approved' || !['processing', 'dispatched', 'in_transit', 'delivered'].includes(state))).map((state) => ({ value: state, label: state.replace('_', ' ') })) : [], [order]);
   if (!order) return <Drawer opened={false} onClose={onClose} />;
   const whatsapp = buildWhatsappLink(order.shipping.whatsapp, buildOrderStatusMessage(order));
   const generateTrackingId = () => {
@@ -35,8 +36,9 @@ export function OrderDetailDrawer({ order, onClose }: {order: Order | null;onClo
   };
   return <Drawer opened={!!order} onClose={onClose} title="Order review" position="right" size="lg"><Stack>
     <div><Badge color={order.isSampleOrder ? 'yellow' : 'green'} variant="light">{order.isSampleOrder ? 'Sample order' : 'Live order'}</Badge><Title order={2} mt="xs">{order.reference}</Title><Text size="sm" c="dimmed">Created {new Date(order.createdAt).toLocaleString()}</Text></div>
-    <Alert color="yellow" title="Payment evidence policy">A submitted transaction reference is not verified payment. Review manually before approving.</Alert>
+    <Alert color="yellow" title="Payment evidence policy">Review the receipt image manually. An upload or reference never verifies or settles payment. Only approved payment can begin processing.</Alert>
     <section><Text fw={700}>Customer & shipping</Text><Text mt="xs">{order.shipping.fullName}</Text><Text size="sm" c="dimmed">{order.shipping.whatsapp}<br />{order.shipping.address}, {order.shipping.city}, {order.shipping.country}</Text><Text size="xs" c="dimmed" mt="xs">Payment reference: {order.payment.transactionReference || 'Not yet submitted'}</Text></section>
+    <ReceiptViewer key={order.id} receiptId={order.payment.receiptId} />
     <Divider />
     <section><Text fw={700}>Items (immutable snapshot)</Text>{order.items.map((item) => <Group key={`${item.productId}-${item.variantLabel || ''}`} justify="space-between" mt="sm"><div><Text size="sm">{item.name}</Text><Text size="xs" c="dimmed">{item.sku}{item.variantLabel ? ` · ${item.variantLabel}` : ''} · Qty {item.quantity}</Text></div><Text fw={600}>{formatPKR(item.unitPrice * item.quantity)}</Text></Group>)}<Group justify="space-between" mt="md"><Text fw={700}>Total</Text><Text fw={800} c="emerald.8">{formatPKR(order.total)}</Text></Group></section>
     <Divider />

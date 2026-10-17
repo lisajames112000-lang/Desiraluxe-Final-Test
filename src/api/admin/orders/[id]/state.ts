@@ -30,7 +30,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
       const cancelling = current.fulfillmentState !== 'cancelled' && nextFulfillment === 'cancelled';
       const nextPayment: PaymentState = input.paymentState || (cancelling && current.paymentState === 'approved' ? 'refund_required' : current.paymentState);
       if (nextPayment === 'refunded' && current.paymentState !== 'refunded') throw new Error('REFUND_RECORD_REQUIRED');
-      if (['dispatched', 'in_transit', 'delivered'].includes(nextFulfillment) && nextPayment !== 'approved') throw new Error('CROSS_STATE_INVALID');
+      if (['processing', 'dispatched', 'in_transit', 'delivered'].includes(nextFulfillment) && nextPayment !== 'approved') throw new Error('CROSS_STATE_INVALID');
       if (cancelling) await releaseOrderInventory(db, transaction, id, current, admin.uid, 'order_cancelled');
       const now = new Date().toISOString();
       committedUpdatedAt = now;
@@ -42,7 +42,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
     const code = error instanceof Error ? error.message : '';
     if (code === 'NOT_FOUND') return response.status(404).json({ error: 'Order not found.' });
     if (code === 'INVALID_TRANSITION') return response.status(409).json({ error: 'That order transition is not allowed.' });
-    if (code === 'CROSS_STATE_INVALID') return response.status(409).json({ error: 'Dispatch and delivery require approved payment under the current manual-payment policy.' });
+    if (code === 'CROSS_STATE_INVALID') return response.status(409).json({ error: 'Processing, dispatch and delivery require approved payment under the current manual-payment policy.' });
     if (code === 'REFUND_RECORD_REQUIRED') return response.status(409).json({ error: 'Record the confirmed refund amount and reference instead of changing directly to refunded.' });
     if (code === 'INVENTORY_RESTORE_BLOCKED') return response.status(409).json({ error: 'Cancellation was blocked because an ordered product or variant can no longer be restored safely.' });
     const failure = serverErrorMessage(error);

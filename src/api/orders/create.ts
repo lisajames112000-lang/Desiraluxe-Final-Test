@@ -7,6 +7,8 @@ import { expireOverdueReservations } from '../../services/server/expireOrders.js
 import { allowOrigin, enforceRateLimit, hashIdentifier, requestIp, requireMethod, serverErrorMessage, setPrivateHeaders } from '../../services/server/http.js';
 import { syncMediaReferences } from '../../services/server/mediaAssociations.js';
 
+import { receiptBelongsToCheckout } from '../../services/server/receiptPolicy.js';
+
 // Small enough to keep checkout fast; the daily cron handles any larger backlog.
 const CHECKOUT_EXPIRY_BATCH = 10;
 
@@ -15,7 +17,9 @@ const schema = z.object({
   idempotencyKey: z.string().min(20).max(120),
   items: z.array(itemSchema).min(1).max(50),
   paymentMethodId: z.string().min(1).max(120),
-  transactionReference: z.string().trim().max(160),
+  transactionReference: z.string().trim().max(160).optional().default(''),
+  receiptId: z.string().regex(/^[a-f0-9]{32}$/),
+  receiptOwnerToken: z.string().min(32).max(200),
   shipping: z.object({ fullName: z.string().trim().min(2).max(120), whatsapp: z.string().trim().regex(/^\+\d[\d\s-]{7,20}$/), address: z.string().trim().min(8).max(500), city: z.string().trim().min(2).max(120), country: z.literal('Pakistan'), postalCode: z.string().trim().max(30).optional(), note: z.string().trim().max(800).optional() }).strict()
 }).strict();
 
@@ -25,6 +29,7 @@ function requestFingerprint(input: z.infer<typeof schema>, items: Array<{product
     items: items.slice().sort((left, right) => `${left.productId}:${left.variantId || ''}`.localeCompare(`${right.productId}:${right.variantId || ''}`)),
     paymentMethodId: input.paymentMethodId,
     transactionReference: input.transactionReference,
+    receiptId: input.receiptId, receiptOwnerToken: input.receiptOwnerToken,
     shipping: {
       fullName: input.shipping.fullName,
       whatsapp: input.shipping.whatsapp,
@@ -74,16 +79,18 @@ export default async function handler(request: VercelRequest, response: VercelRe
     const counterRef = db.collection('system').doc('orderCounter');
     const methodRef = db.collection('paymentMethodsPublic').doc(input.paymentMethodId);
     const settingsRef = db.collection('siteSettings').doc('public');
+    const receiptRef = db.collection('paymentReceipts').doc(input.receiptId);
     const productRefs = requestedByProduct.map(([productId]) => db.collection('products').doc(productId));
 
     const result = await db.runTransaction(async (transaction) => {
-      const [repeated, methodSnapshot, settingsSnapshot, counterSnapshot, ...productSnapshots] = await Promise.all([
-      transaction.get(idempotencyRef), transaction.get(methodRef), transaction.get(settingsRef), transaction.get(counterRef), ...productRefs.map((ref) => transaction.get(ref))]
+      const [repeated, receiptSnapshot, methodSnapshot, settingsSnapshot, counterSnapshot, ...productSnapshots] = await Promise.all([
+      transaction.get(idempotencyRef), transaction.get(receiptRef), transaction.get(methodRef), transaction.get(settingsRef), transaction.get(counterRef), ...productRefs.map((ref) => transaction.get(ref))]
       );
       if (repeated.exists) {
         if (repeated.data()?.fingerprint !== fingerprint) throw new Error('IDEMPOTENCY_MISMATCH');
         return repeated.data()?.response as Record<string, unknown>;
       }
+      if (!receiptBelongsToCheckout(receiptSnapshot.data(), input.receiptOwnerToken)) throw new Error('RECEIPT_INVALID');
       const method = methodSnapshot.data();
       if (!methodSnapshot.exists || method?.enabled !== true || !method.accountTitle || !method.accountNumber || !method.instructions) throw new Error('PAYMENT_UNAVAILABLE');
 
@@ -120,14 +127,15 @@ export default async function handler(request: VercelRequest, response: VercelRe
       const reference = `DLX-${now.getUTCFullYear()}-${String(sequence).padStart(7, '0')}`;
       const order = {
         id: orderRef.id, reference, items: orderItems, productIds: Array.from(new Set(orderItems.map((item) => item.productId))), subtotal, shippingFee, discount: 0, total: subtotal + shippingFee, currency: 'PKR', shipping: input.shipping,
-        payment: { methodId: methodSnapshot.id, methodType: method.type || null, methodLabel: method.label, transactionReference: input.transactionReference, submittedAt: now.toISOString(), instructionSnapshot: { accountTitle: method.accountTitle, accountNumber: method.accountNumber, instructions: method.instructions, qrImage: method.qrImage || null, cryptoAsset: method.cryptoAsset || null, cryptoNetwork: method.cryptoNetwork || null } },
-        paymentState: input.transactionReference ? 'under_review' : 'awaiting_proof', reviewDeadline: new Date(now.getTime() + Number(settings.reviewCountdownMinutes || 30) * 60_000).toISOString(), fulfillmentState: 'pending', isSampleOrder: false, createdAt: now.toISOString(), updatedAt: now.toISOString(),
+        payment: { methodId: methodSnapshot.id, methodType: method.type || null, methodLabel: method.label, receiptId: input.receiptId, transactionReference: input.transactionReference, submittedAt: now.toISOString(), instructionSnapshot: { accountTitle: method.accountTitle, accountNumber: method.accountNumber, instructions: method.instructions, qrImage: method.qrImage || null, cryptoAsset: method.cryptoAsset || null, cryptoNetwork: method.cryptoNetwork || null } },
+        paymentState: 'under_review', reviewDeadline: new Date(now.getTime() + Number(settings.reviewCountdownMinutes || 30) * 60_000).toISOString(), fulfillmentState: 'pending', isSampleOrder: false, createdAt: now.toISOString(), updatedAt: now.toISOString(),
         auditLog: [{ id: randomBytes(12).toString('hex'), at: now.toISOString(), actor: 'checkout', action: 'Order created through trusted checkout' }]
       };
       const safeResponse = { order: { id: order.id, reference, total: order.total, currency: order.currency }, accessToken };
       const historicalMedia = [...orderItems.map((item) => String(item.image || '')).filter(Boolean), typeof method.qrImage === 'string' ? method.qrImage : ''].filter(Boolean);
       await syncMediaReferences(db, transaction, `orders/${order.id}`, [], historicalMedia);
       inventoryWrites.forEach(({ ref, patch }) => transaction.update(ref, patch));
+      transaction.update(receiptRef, { orderId: order.id, associatedAt: now.toISOString() });
       transaction.set(orderRef, order);
       transaction.set(accessRef, { orderId: order.id, createdAt: FieldValue.serverTimestamp(), lastUsedAt: null });
       transaction.set(counterRef, { value: sequence, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
@@ -139,6 +147,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
   } catch (error) {
     if (error instanceof z.ZodError) return response.status(400).json({ error: 'Checkout details are invalid or incomplete.' });
     const code = error instanceof Error ? error.message : '';
+    if (code === 'RECEIPT_INVALID') return response.status(409).json({ error: 'Upload and verify your own receipt image before placing the order. Select the image again if it expired.' });
     if (code === 'PAYMENT_UNAVAILABLE') return response.status(409).json({ error: 'The selected payment method is no longer available.' });
     if (code === 'IDEMPOTENCY_MISMATCH') return response.status(409).json({ error: 'This checkout retry key was already used for different order details. Review the cart and submit again.' });
     if (['PRODUCT_UNAVAILABLE', 'VARIANT_UNAVAILABLE', 'STOCK_UNAVAILABLE'].includes(code)) return response.status(409).json({ error: 'One or more cart items changed or are unavailable. Review the cart and retry.' });

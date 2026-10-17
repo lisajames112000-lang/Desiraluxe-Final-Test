@@ -50,7 +50,8 @@ export interface PaymentSubmission {
   methodId: string;
   methodType: PaymentMethodType | null;
   methodLabel: string;
-  transactionReference: string;
+  transactionReference?: string;
+  receiptId?: string;
   submittedAt: string;
 }
 

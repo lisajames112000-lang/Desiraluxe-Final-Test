@@ -26,7 +26,9 @@ import { useAdminAuth } from './AdminAuthContext';
 export interface CreateOrderInput {
   shipping: ShippingDetails;
   paymentMethodId: string;
-  transactionReference: string;
+  transactionReference?: string;
+  receiptId: string;
+  receiptOwnerToken: string;
   idempotencyKey: string;
 }
 
