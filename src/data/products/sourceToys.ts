@@ -4344,7 +4344,7 @@ export const sourceToys: Product[] = [
     "id": "github-product-101",
     "name": "Best Products For Male & Female In Pakistan",
     "slug": "best-products-for-male-female-in-pakistan-93",
-    "sku": "DLX-TOY-101",
+    "sku": "DLX-ADULT-101",
     "categorySlugs": [
       "toys"
     ],
@@ -4388,7 +4388,7 @@ export const sourceToys: Product[] = [
     "id": "github-product-102",
     "name": "Best Products For Male & Female In Pakistan",
     "slug": "best-products-for-male-female-in-pakistan-94",
-    "sku": "DLX-TOY-102",
+    "sku": "DLX-ADULT-102",
     "categorySlugs": [
       "toys"
     ],
@@ -4430,7 +4430,7 @@ export const sourceToys: Product[] = [
     "id": "github-product-103",
     "name": "Best Products For Male & Female In Pakistan",
     "slug": "best-products-for-male-female-in-pakistan-95",
-    "sku": "DLX-TOY-103",
+    "sku": "DLX-ADULT-103",
     "categorySlugs": [
       "toys"
     ],
@@ -4472,7 +4472,7 @@ export const sourceToys: Product[] = [
     "id": "github-product-104",
     "name": "Best Products For Male & Female In Pakistan",
     "slug": "best-products-for-male-female-in-pakistan-copy",
-    "sku": "DLX-TOY-104",
+    "sku": "DLX-ADULT-104",
     "categorySlugs": [
       "toys"
     ],
@@ -4514,7 +4514,7 @@ export const sourceToys: Product[] = [
     "id": "github-product-105",
     "name": "Best Products For Male & Female In Pakistan",
     "slug": "best-products-for-male-female-in-pakistan-copy-1",
-    "sku": "DLX-TOY-105",
+    "sku": "DLX-ADULT-105",
     "categorySlugs": [
       "toys"
     ],
