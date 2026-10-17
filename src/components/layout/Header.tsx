@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ActionIcon, Burger, Button, Drawer, Group, Menu, Text, TextInput } from '@mantine/core';
-import { SearchIcon, ShoppingBagIcon, SparklesIcon, UserRoundIcon } from 'lucide-react';
+import { SearchIcon, ShoppingBagIcon, SparklesIcon } from 'lucide-react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useStore } from '../../contexts/StoreContext';
 import { Logo } from '../brand/Logo';
@@ -39,7 +39,6 @@ export function Header() {
           </form>
           <Group gap={5} wrap="nowrap" ml="auto">
             <ActionIcon component={Link} to="/search" aria-label="Search" variant="subtle" color="emerald" size="lg" className="md:hidden"><SearchIcon size={20} /></ActionIcon>
-            <ActionIcon component={Link} to="/admin" aria-label="Owner admin" variant="subtle" color="emerald" size="lg" className="hidden sm:flex"><UserRoundIcon size={20} /></ActionIcon>
             <div className="relative">
               <ActionIcon component={Link} to="/cart" aria-label={`Shopping cart with ${cartCount} items`} variant="subtle" color="emerald" size="lg"><ShoppingBagIcon size={21} /></ActionIcon>
               {cartCount > 0 && <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-emerald-deep px-1 text-[10px] font-bold text-white">{cartCount > 99 ? '99+' : cartCount}</span>}
@@ -69,7 +68,6 @@ export function Header() {
           {[['Home', '/'], ['Shop all', '/shop'], ['All categories', '/categories']].map(([label, href]) => <Button key={href} component={Link} to={href} onClick={() => setOpened(false)} variant="subtle" color="dark" justify="start">{label}</Button>)}
           <Text mt="lg" mb="xs" px="md" size="xs" tt="uppercase" fw={700} c="dimmed" lts="0.12em">Categories</Text>
           {categories.filter((c) => c.isPublished).map((c) => <Button key={c.id} component={Link} to={`/category/${c.slug}`} onClick={() => setOpened(false)} variant="subtle" color="dark" justify="start">{c.name}</Button>)}
-          <Button component={Link} to="/admin" onClick={() => setOpened(false)} color="emerald" variant="light" mt="lg" leftSection={<UserRoundIcon size={17} />}>Owner admin preview</Button>
         </div>
       </Drawer>
     </>);
