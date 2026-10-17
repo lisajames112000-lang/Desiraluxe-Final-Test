@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
-import { Alert, Button, Group, Progress, Text } from '@mantine/core';
+import React, { useMemo, useRef, useState } from 'react';
+import { Alert, Button, Group, NumberInput, Progress, Text } from '@mantine/core';
 import { PackagePlusIcon } from 'lucide-react';
 import { useStore } from '../../contexts/StoreContext';
 import { categories as curatedCategories } from '../../data/categories';
 import { heroSlides as curatedHeroSlides } from '../../data/heroSlides';
 import { initialProducts as curatedProducts } from '../../data/products';
+import { sourceToys } from '../../data/products/sourceToys';
 
 interface ImportState {
   running: boolean;
@@ -18,7 +19,7 @@ interface ImportState {
  * Lets the owner publish the curated imported catalog (categories, products, hero slides)
  * into the live store so every item becomes editable from the admin.
  */
-export function CuratedCatalogImport() {
+function CuratedBuiltInImport() {
   const { products, categories, heroSlides, backendStatus, addCategory, addProduct, addHeroSlide } = useStore();
   const [state, setState] = useState<ImportState>({ running: false, done: 0, total: 0, failures: [], finished: false });
 
@@ -86,4 +87,63 @@ export function CuratedCatalogImport() {
       }
     </Alert>);
 
+}
+
+/** Independent of the built-in import: only missing, non-medication adult products. */
+export function SourceToysImport() {
+  const { products, categories, backendStatus, addProduct } = useStore();
+  const latestProducts = useRef(products);
+  latestProducts.current = products;
+  const acknowledged = useRef(new Set<string>());
+  const running = useRef(false);
+  const [stock, setStock] = useState<string | number>(0);
+  const [state, setState] = useState<ImportState>({ running: false, done: 0, total: 0, failures: [], finished: false });
+  const missing = sourceToys.filter((item) => !acknowledged.current.has(item.id) && !products.some((existing) => existing.id === item.id || existing.slug === item.slug));
+  const toysPublished = categories.some((item) => item.slug === 'toys' && item.isPublished);
+  const validStock = typeof stock === 'number' && Number.isSafeInteger(stock) && stock >= 0;
+  if (backendStatus.state === 'demo') return null;
+
+  const run = async () => {
+    if (running.current || !validStock || !toysPublished) return;
+    running.current = true;
+    const tasks = [...missing];
+    const initialStock = Number(stock);
+    const failures: string[] = [];
+    setState({ running: true, done: 0, total: tasks.length, failures: [], finished: false });
+    try {
+      for (const [i, item] of tasks.entries()) {
+        // Fresh context plus acknowledged writes prevents duplicates during retries.
+        const exists = acknowledged.current.has(item.id) || latestProducts.current.some((existing) => existing.id === item.id || existing.slug === item.slug);
+        if (!exists) {
+          try {
+            const result = await addProduct({ ...item, stock: initialStock });
+            if (result.ok) acknowledged.current.add(item.id);
+            else failures.push(item.id + ' (' + item.slug + '): ' + result.message);
+          } catch (error) {
+            failures.push(item.id + ' (' + item.slug + '): ' + (error instanceof Error ? error.message : String(error)));
+          }
+        }
+        setState((current) => ({ ...current, done: i + 1, failures: [...failures] }));
+      }
+    } finally {
+      running.current = false;
+      setState((current) => ({ ...current, running: false, finished: true, failures: [...failures] }));
+    }
+  };
+
+  return <Alert mt="md" color={state.finished && !state.failures.length ? 'green' : 'yellow'} icon={<PackagePlusIcon size={18} />} title="Import 110 adult products (18+ only)">
+    <Text size="sm">Non-medication adult wellness catalog, not soft toys. Source names, prices and all images are preserved. Existing IDs or slugs are skipped, never overwritten. {missing.length} products remain.</Text>
+    {!toysPublished && <Text c="red" size="sm" mt="sm">Publish the category with slug “toys” before importing.</Text>}
+    <NumberInput mt="sm" label="Owner-confirmed initial stock per product" description="Enter an actual whole-number quantity for each imported product. Default 0 means out of stock; no inventory is assumed." min={0} allowDecimal={false} allowNegative={false} value={stock} onChange={setStock} disabled={state.running} />
+    {!validStock && <Text size="sm" c="red">Stock must be a whole number of 0 or more.</Text>}
+    {missing.length > 0 && <details className="mt-3"><summary>Missing product IDs and slugs ({missing.length})</summary><ul className="max-h-48 overflow-auto text-xs">{missing.map((item) => <li key={item.id}>{item.id}: {item.slug}</li>)}</ul></details>}
+    {(state.running || state.finished) && <><Progress mt="sm" value={state.total ? state.done / state.total * 100 : 0} animated={state.running} aria-label="Adult catalog import progress" /><Text size="sm" mt="sm">{state.done} / {state.total} processed. {state.failures.length} failed.{state.finished && !state.failures.length ? ' All records in this batch are acknowledged or already present.' : ''}</Text></>}
+    {state.failures.length > 0 && <ul className="mt-3 max-h-48 overflow-auto text-xs text-red-700">{state.failures.map((failure) => <li key={failure}>{failure}</li>)}</ul>}
+    {missing.length > 0 && <Button mt="sm" color="emerald" loading={state.running} disabled={!toysPublished || !validStock} onClick={() => void run()}>{state.finished ? 'Retry remaining adult products' : 'Import missing adult products (18+)'}</Button>}
+    {!missing.length && <Text size="sm" mt="sm">No missing source products. Existing records were not changed.</Text>}
+  </Alert>;
+}
+
+export function CuratedCatalogImport() {
+  return <><CuratedBuiltInImport /><SourceToysImport /></>;
 }
