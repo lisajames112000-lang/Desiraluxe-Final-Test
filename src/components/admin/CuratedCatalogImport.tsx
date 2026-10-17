@@ -144,6 +144,58 @@ export function SourceToysImport() {
   </Alert>;
 }
 
+
+/** Applies the owner's requested stock range only to this imported Toys catalog. */
+export function SourceToysStockUpdate() {
+  const { products, backendStatus, updateProduct } = useStore();
+  const latestProducts = useRef(products);
+  latestProducts.current = products;
+  const running = useRef(false);
+  const [state, setState] = useState<ImportState>({ running: false, done: 0, total: 0, failures: [], finished: false });
+  const sourceIds = new Set(sourceToys.map((item) => item.id));
+  const targets = products.filter((item) => sourceIds.has(item.id) && item.categorySlugs.includes('toys'));
+  const pending = targets.filter((item) => !Number.isSafeInteger(item.stock) || item.stock < 400 || item.stock > 800);
+  const configured = targets.length - pending.length;
+  if (backendStatus.state === 'demo') return null;
+
+  const run = async () => {
+    if (running.current || targets.length !== sourceToys.length || !pending.length) return;
+    running.current = true;
+    const plan = pending.map((item) => ({ id: item.id, stock: 400 + Math.floor(Math.random() * 401) }));
+    const failures: string[] = [];
+    setState({ running: true, done: 0, total: plan.length, failures: [], finished: false });
+    try {
+      for (const [i, planned] of plan.entries()) {
+        const current = latestProducts.current.find((item) => item.id === planned.id);
+        if (!current || !current.categorySlugs.includes('toys')) {
+          failures.push(planned.id + ': Product missing or category changed; no write made.');
+        } else if (current.stock < 400 || current.stock > 800 || !Number.isSafeInteger(current.stock)) {
+          try {
+            const result = await updateProduct({ ...current, stock: planned.stock });
+            if (!result.ok) failures.push(planned.id + ': ' + result.message);
+          } catch (error) {
+            failures.push(planned.id + ': ' + (error instanceof Error ? error.message : String(error)));
+          }
+        }
+        setState((value) => ({ ...value, done: i + 1, failures: [...failures] }));
+      }
+    } finally {
+      running.current = false;
+      setState((value) => ({ ...value, running: false, finished: true, failures: [...failures] }));
+    }
+  };
+
+  return <Alert mt="md" color={configured === sourceToys.length ? 'green' : 'blue'} icon={<PackagePlusIcon size={18} />} title="Toys stock: 400 to 800 units">
+    <Text size="sm">Owner-requested inventory settings for the 110 imported Toys products only. Each pending product receives its own random whole-number quantity from 400 through 800, inclusive. Product names, prices, images and existing records outside this catalog are preserved.</Text>
+    <Text size="sm" mt="sm">{configured} / {sourceToys.length} products have stock within the requested range. {pending.length} remain.</Text>
+    {targets.length !== sourceToys.length && <Text size="sm" c="red">All 110 source products must be present before this stock update can run.</Text>}
+    {(state.running || state.finished) && <><Progress mt="sm" value={state.total ? state.done / state.total * 100 : 0} animated={state.running} aria-label="Toys stock update progress" /><Text size="sm" mt="sm">{state.done} / {state.total} processed. {state.failures.length} failed.</Text></>}
+    {state.failures.length > 0 && <ul className="mt-3 max-h-48 overflow-auto text-xs text-red-700">{state.failures.map((failure) => <li key={failure}>{failure}</li>)}</ul>}
+    {pending.length > 0 && <Button mt="sm" color="emerald" loading={state.running} disabled={targets.length !== sourceToys.length} onClick={() => void run()}>{state.finished ? 'Retry remaining Toys stock updates' : 'Set Toys stock to random 400–800'}</Button>}
+    {configured === sourceToys.length && <Text size="sm" mt="sm">All 110 Toys products now have stock from 400 through 800.</Text>}
+  </Alert>;
+}
+
 export function CuratedCatalogImport() {
-  return <><CuratedBuiltInImport /><SourceToysImport /></>;
+  return <><CuratedBuiltInImport /><SourceToysImport /><SourceToysStockUpdate /></>;
 }
