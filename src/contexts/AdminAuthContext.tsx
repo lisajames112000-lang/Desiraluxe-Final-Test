@@ -10,8 +10,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
   updatePassword,
-  type User,
-  type UserCredential } from
+  type User } from
 'firebase/auth';
 import { firebaseClient } from '../services/firebase/client';
 
@@ -34,20 +33,29 @@ class OwnerSetupError extends Error {}
 
 interface OwnerSetupResult {ok: boolean;message?: string;}
 
-// Asks the server to prepare the owner account on first sign-in. Only
-// infrastructure failures return a message; wrong credentials or an already
-// completed setup fall back to the normal sign-in error.
-async function requestOwnerSetup(email: string, password: string): Promise<OwnerSetupResult> {
+// After a successful Firebase sign-in, ask the server to grant the admin claim
+// only to the explicitly allowlisted owner account. The password is never sent
+// to this endpoint and the endpoint cannot create/reset Authentication users.
+async function requestOwnerSetup(user: User): Promise<OwnerSetupResult> {
   try {
-    const response = await fetch('/api/admin/bootstrap', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email.trim(), password }) });
+    const idToken = await user.getIdToken();
+    const response = await fetch('/api/admin/bootstrap', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`
+      },
+      body: JSON.stringify({})
+    });
     const isJson = (response.headers.get('content-type') || '').includes('application/json');
-    if (!isJson) return { ok: false, message: 'The owner setup service is not available here. Open the admin page on your live Vercel website (not the design preview) and sign in again.' };
-    const body = (await response.json().catch(() => ({}))) as {ready?: boolean;error?: string;};
+    if (!isJson) {
+      return { ok: false, message: 'The admin setup API is unavailable. Sign in from the deployed Vercel website and verify that /api/admin/bootstrap is deployed.' };
+    }
+    const body = (await response.json().catch(() => ({}))) as { ready?: boolean; error?: string };
     if (response.ok && body.ready) return { ok: true };
-    if (response.status === 403 || response.status === 409 || response.status === 400) return { ok: false };
-    return { ok: false, message: body.error || 'The owner setup service could not complete the request.' };
+    return { ok: false, message: body.error || 'The server could not authorize this owner account.' };
   } catch {
-    return { ok: false, message: 'The owner setup service could not be reached. Check your connection and retry.' };
+    return { ok: false, message: 'The admin setup service could not be reached. Check the deployed API and try again.' };
   }
 }
 
@@ -73,6 +81,7 @@ export function AdminAuthProvider({ children }: {children: React.ReactNode;}) {
   const [state, setState] = useState<AdminAuthState>(firebaseClient.configured ? 'loading' : 'configuration-error');
   const [authenticationError, setAuthenticationError] = useState<string | null>(null);
   const deniedSignOut = useRef(false);
+  const signInInProgress = useRef(false);
 
   useEffect(() => {
     const auth = firebaseClient.auth;
@@ -85,6 +94,7 @@ export function AdminAuthProvider({ children }: {children: React.ReactNode;}) {
       setAuthenticationError('This browser could not enable durable Firebase sign-in persistence.');
     });
     return onAuthStateChanged(auth, async (nextUser) => {
+      const preserveForSignIn = signInInProgress.current;
       if (!nextUser) {
         setUser(null);
         setIsAdmin(false);
@@ -102,6 +112,9 @@ export function AdminAuthProvider({ children }: {children: React.ReactNode;}) {
       setState('verifying-permission');
       try {
         const token = await nextUser.getIdTokenResult(true);
+        // The explicit sign-in flow may be provisioning the allowlisted owner
+        // claim right now. Let that flow finish instead of racing it with sign-out.
+        if (preserveForSignIn) return;
         const authorized = token.claims.admin === true;
         setUser(authorized ? nextUser : null);
         setIsAdmin(authorized);
@@ -132,52 +145,47 @@ export function AdminAuthProvider({ children }: {children: React.ReactNode;}) {
     const auth = firebaseClient.auth;
     if (!auth) throw new Error(firebaseClient.configurationError || 'Firebase is not configured.');
     deniedSignOut.current = false;
+    signInInProgress.current = true;
     setAuthenticationError(null);
     setState('loading');
     try {
-      let credential: UserCredential;
-      try {
-        credential = await signInWithEmailAndPassword(auth, email.trim(), password);
-      } catch (error) {
-        const credentialError = error instanceof FirebaseError && ['auth/invalid-credential', 'auth/user-not-found', 'auth/wrong-password', 'auth/invalid-login-credentials'].includes(error.code);
-        if (!credentialError) throw error;
-        const setup = await requestOwnerSetup(email, password);
-        if (!setup.ok) throw setup.message ? new OwnerSetupError(setup.message) : error;
-        credential = await signInWithEmailAndPassword(auth, email.trim(), password);
-      }
+      // Never reset or create an account as a side effect of a failed password
+      // sign-in. Firebase must first verify the supplied credentials.
+      const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
       setState('verifying-permission');
+
       let token = await credential.user.getIdTokenResult(true);
       if (token.claims.admin !== true) {
-        deniedSignOut.current = true;
-        await signOut(auth);
-        const setup = await requestOwnerSetup(email, password);
-        if (!setup.ok && setup.message) throw new OwnerSetupError(setup.message);
-        if (setup.ok) {
-          deniedSignOut.current = false;
-          credential = await signInWithEmailAndPassword(auth, email.trim(), password);
-          token = await credential.user.getIdTokenResult(true);
-        }
+        const setup = await requestOwnerSetup(credential.user);
+        if (!setup.ok) throw new OwnerSetupError(setup.message || 'This account is not authorized for DesiraLuxe administration.');
+        token = await credential.user.getIdTokenResult(true);
       }
+
       if (token.claims.admin !== true) {
         deniedSignOut.current = true;
         setState('permission-denied');
         setAuthenticationError('This signed-in account does not have the required admin custom claim.');
         await signOut(auth);
-        throw new Error('This account is not authorized for Desiraluxe administration.');
+        throw new Error('This account is not authorized for DesiraLuxe administration.');
       }
-      // The claim was verified above; publish it immediately so navigation to
-      // /admin/dashboard is not raced by the auth-state listener.
+
       setUser(credential.user);
       setIsAdmin(true);
       setLoading(false);
       setState('authorized');
+      setAuthenticationError(null);
+      signInInProgress.current = false;
     } catch (error) {
-      if (error instanceof Error && error.message.includes('not authorized')) throw error;
-      setState('error');
+      signInInProgress.current = false;
       if (error instanceof OwnerSetupError) {
+        setState('error');
+        deniedSignOut.current = true;
+        if (auth.currentUser) await signOut(auth).catch(() => undefined);
         setAuthenticationError(error.message);
         throw error;
       }
+      if (error instanceof Error && error.message.includes('not authorized')) throw error;
+      setState('error');
       const message = authMessage(error);
       setAuthenticationError(message);
       throw new Error(message);
