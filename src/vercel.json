@@ -13,11 +13,11 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "/api/dispatch?__route=:path*"
+      "destination": "/api/dispatch.ts?__route=:path*"
     },
     {
       "source": "/sitemap.xml",
-      "destination": "/api/dispatch?__route=sitemap"
+      "destination": "/api/dispatch.ts?__route=sitemap"
     },
     {
       "source": "/((?!api/).*)",
