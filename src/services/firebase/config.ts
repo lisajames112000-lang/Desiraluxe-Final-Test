@@ -21,10 +21,10 @@ declare const __FIREBASE_PUBLIC_CONFIG__: Partial<FirebasePublicConfig> | undefi
 export const EXPECTED_FIREBASE_PROJECT_ID = 'e-commerce-711c0';
 
 const previewFallback: FirebasePublicConfig = {
-  // Exact public Web configuration supplied by the project owner. These values
+  // Public Web configuration verified in Firebase Console. These values
   // identify the Firebase Web app; they are not Firebase Admin credentials and
   // do not bypass Firestore Security Rules.
-  apiKey: 'AIzaSyBMCNh_3p9SjalAAi2D0eD6GcTCreY87Ok',
+  apiKey: 'AIzaSyBMCNh_3p9SjalAAi2D0eD6GcTCrey87Ok',
   authDomain: 'e-commerce-711c0.firebaseapp.com',
   projectId: EXPECTED_FIREBASE_PROJECT_ID,
   storageBucket: 'e-commerce-711c0.firebasestorage.app',
@@ -51,9 +51,22 @@ function sanitizeConfig(value: Partial<FirebasePublicConfig> | undefined): Parti
 }
 
 export function resolveFirebaseConfig(override?: Partial<FirebasePublicConfig>): ResolvedFirebaseConfig {
-  const buildConfig = sanitizeConfig(
-    override ?? (typeof __FIREBASE_PUBLIC_CONFIG__ === 'undefined' ? undefined : __FIREBASE_PUBLIC_CONFIG__)
+  // Read Vite's native env values so both supported build roots work. The
+  // custom define is retained only for backwards-compatible deployments.
+  const viteConfig = sanitizeConfig({
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID
+  });
+  const injectedConfig = sanitizeConfig(
+    typeof __FIREBASE_PUBLIC_CONFIG__ === 'undefined' ? undefined : __FIREBASE_PUBLIC_CONFIG__
   );
+  const buildConfig = override === undefined
+    ? { ...injectedConfig, ...viteConfig }
+    : sanitizeConfig(override);
   const combined = { ...sanitizeConfig(previewFallback), ...buildConfig };
   const missing = requiredKeys.filter((key) => !combined[key]);
 
