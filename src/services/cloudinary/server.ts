@@ -177,6 +177,8 @@ export function resourceTypeFor(value: unknown): CloudinaryResourceType {
 }
 export function receiptDownloadUrl(publicId: string, format: string): string {
  const config = requireConfig();
- const params = { public_id: publicId, format, type: 'authenticated', expires_at: String(Math.floor(Date.now()/1000)+60), attachment: 'false' };
+ // Cloudinary download signatures require timestamp as well as expires_at.
+ const now = timestamp();
+ const params = { timestamp: now, public_id: publicId, format, type: 'authenticated', expires_at: String(Number(now) + 300), attachment: 'false' };
  return `${API_ORIGIN}/${config.cloudName}/image/download?${new URLSearchParams({...params, api_key:config.apiKey, signature:cloudinarySignature(params,config.apiSecret,config.algorithm)})}`;
 }
