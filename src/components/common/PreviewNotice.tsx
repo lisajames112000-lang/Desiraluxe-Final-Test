@@ -1,12 +1,18 @@
 import React from 'react';
 import { Alert, Anchor, Text } from '@mantine/core';
 import { InfoIcon } from 'lucide-react';
+import { useStore } from '../../contexts/StoreContext';
 
 interface PreviewNoticeProps {
   compact?: boolean;
 }
 
 export function PreviewNotice({ compact = false }: PreviewNoticeProps) {
+  const { backendStatus, products, categories } = useStore();
+  if (backendStatus.state === 'loading') {
+    return products.length || categories.length ?
+      <Text size="xs" c="dimmed" role="status" py="xs">Recently saved catalog shown. Checking the latest prices and availability before checkout.</Text> : null;
+  }
   return (
     <Alert
       icon={<InfoIcon size={17} />}

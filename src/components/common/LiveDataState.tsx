@@ -1,5 +1,4 @@
 import React from 'react';
-import { Center, Loader, Stack, Text } from '@mantine/core';
 import type { PublicResourceStatus } from '../../types/backend';
 import { EmptyState } from './EmptyState';
 
@@ -31,7 +30,14 @@ export function LiveDataState({
     return <>{children}</>;
   }
   if (status.state === 'loading') {
-    return <Center mih={260} role="status" aria-live="polite"><Stack align="center"><Loader color="emerald" /><Text c="dimmed">{loadingLabel}</Text></Stack></Center>;
+    return <div role="status" aria-live="polite" aria-label={loadingLabel} className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-4">
+      <span className="sr-only">{loadingLabel}</span>
+      {Array.from({ length: 4 }, (_, index) => <div key={index} aria-hidden="true" className="overflow-hidden rounded-2xl border border-line bg-white p-3">
+        <div className="aspect-square rounded-xl bg-sage" />
+        <div className="mt-3 h-3 w-3/4 rounded bg-sage" />
+        <div className="mt-2 h-3 w-1/2 rounded bg-sage" />
+      </div>)}
+    </div>;
   }
   if (status.state === 'permission-denied') {
     return <EmptyState title="Published content is unavailable" description="Firestore denied this public read. The store owner must deploy the reviewed rules; drafts and private records remain protected." />;

@@ -38,12 +38,11 @@ export function PersistenceStatus() {
   useEffect(() => {const failure = () => setStorageFailed(true);window.addEventListener('desiraluxe-storage-error', failure);return () => window.removeEventListener('desiraluxe-storage-error', failure);}, []);
   const backendProblem = ['offline', 'error', 'cached'].includes(backendStatus.state);
   const demoMode = backendStatus.state === 'demo';
-  const initializing = backendStatus.state === 'loading';
-  if (!storageFailed && !backendProblem && !demoMode && !initializing && !cartNotice) return null;
+  // Normal background initialization is not an error or a blocking popup.
+  if (!storageFailed && !backendProblem && !demoMode && !cartNotice) return null;
   return (
     <div className="fixed bottom-4 left-4 right-4 z-[1000] mx-auto max-w-xl space-y-2" aria-live="polite">
       {demoMode && <Alert color="yellow" radius="lg" variant="filled" icon={<ShieldAlertIcon size={18} />} title="Legacy Preview — shared saving is disabled">{backendStatus.message}</Alert>}
-      {initializing && <Alert color="blue" radius="lg" variant="filled" icon={<DatabaseBackupIcon size={18} />} title="Connection and initialization in progress">{backendStatus.message}</Alert>}
       {backendProblem &&
       <Alert color={backendStatus.state === 'error' ? 'red' : 'yellow'} radius="lg" variant="filled" icon={<CloudOffIcon size={18} />} title={backendStatus.state === 'offline' ? 'You are offline' : 'Live data connection'} role="alert">
           <span className="break-words">{backendStatus.message}</span>
