@@ -22,6 +22,8 @@ import { apiRequest, isDeleteAcknowledgement, isWriteAcknowledgement } from '../
 import { isCheckoutResponse, isIdResponse, type CheckoutResponse } from '../services/apiContracts';
 import { compareByUpdatedDesc, normalizeProduct } from '../utils/productNormalize';
 import { useAdminAuth } from './AdminAuthContext';
+import { readCatalogDisplayCache, writeCatalogDisplayCache } from './catalogDisplayCache';
+import { useLocation } from 'react-router-dom';
 
 export interface CreateOrderInput {
   shipping: ShippingDetails;
@@ -127,21 +129,32 @@ function initialResourceStatuses(state: PublicResourceStatus['state']): Record<P
 }
 
 export function StoreProvider({ children }: {children: React.ReactNode;}) {
-  const { isAdmin, state: adminAuthState } = useAdminAuth();
+  const { isAdmin: authorizedAdmin } = useAdminAuth();
+  const { pathname } = useLocation();
+  // Even the owner browses the public catalog on storefront routes. Private
+  // subscriptions belong only to the guarded admin workspace.
+  const isAdmin = authorizedAdmin && pathname.startsWith('/admin');
   const demoMode = !firebaseClient.configured;
   const [initialized, setInitialized] = useState(false);
+  const projectId = firebaseClient.app?.options.projectId || '';
+  const [displayCache] = useState(() => ({
+    products: readCatalogDisplayCache(projectId, 'products') as unknown[] | undefined,
+    categories: readCatalogDisplayCache(projectId, 'categories') as Category[] | undefined,
+    heroSlides: readCatalogDisplayCache(projectId, 'heroSlides') as HeroSlide[] | undefined,
+    settings: readCatalogDisplayCache(projectId, 'siteSettings') as Partial<BrandSettings> | undefined
+  }));
   // Sample catalog content is only used when Firebase is not configured at all.
-  // When a live project is configured, collections start empty so a failed or
-  // pending Firestore read is never disguised by sample products.
-  const [categories, setCategories] = useState<Category[]>(demoMode ? initialCategories : []);
-  const [products, setProducts] = useState<Product[]>(demoMode ? initialProducts : []);
-  const [heroSlides, setHeroSlides] = useState<HeroSlide[]>(demoMode ? initialHeroSlides : []);
+  // Recently server-confirmed PUBLIC content can paint immediately on return visits.
+  // It remains display-only until every live resource has been reverified.
+  const [categories, setCategories] = useState<Category[]>(demoMode ? initialCategories : displayCache.categories || []);
+  const [products, setProducts] = useState<Product[]>(demoMode ? initialProducts : (displayCache.products || []).map(normalizeProduct));
+  const [heroSlides, setHeroSlides] = useState<HeroSlide[]>(demoMode ? initialHeroSlides : displayCache.heroSlides || []);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodConfig[]>(demoMode ? initialPaymentMethods : []);
   const [popups, setPopups] = useState<PromoPopup[]>(demoMode ? initialPopups : []);
   const [cmsPages, setCmsPages] = useState<CmsPage[]>(demoMode ? initialCmsPages : []);
   // Brand settings keep the built-in store identity (name, layout defaults) until
   // siteSettings/public is loaded; they contain no catalog or customer data.
-  const [brandSettings, setBrandSettings] = useState<BrandSettings>(initialBrandSettings);
+  const [brandSettings, setBrandSettings] = useState<BrandSettings>({ ...initialBrandSettings, ...displayCache.settings });
   const [orders, setOrders] = useState<Order[]>([]);
   const [cart, setCart] = useState<CartItem[]>(() => readJSON<CartItem[]>(STORAGE_KEYS.cart, []));
   const [accountingPeriods, setAccountingPeriods] = useState<AccountingPeriod[]>(demoMode ? initialAccountingPeriods : []);
@@ -173,6 +186,16 @@ export function StoreProvider({ children }: {children: React.ReactNode;}) {
     firebaseClient.auth?.currentUser ?
     'authenticated-unverified' :
     'signed-out';
+    if (!isAdmin) {
+      // Do not carry admin-only records into a storefront route while it reconnects.
+      const cachedProducts = readCatalogDisplayCache(projectId, 'products') as unknown[] | undefined;
+      setProducts((cachedProducts || []).map(normalizeProduct));
+      setCategories((readCatalogDisplayCache(projectId, 'categories') as Category[] | undefined) || []);
+      setHeroSlides((readCatalogDisplayCache(projectId, 'heroSlides') as HeroSlide[] | undefined) || []);
+      setPaymentMethods([]);
+      setPopups([]);
+      setCmsPages([]);
+    }
     const unsubscribes: Array<() => void> = [];
     const completed = new Set<PublicResourceName>();
     const serverConfirmed = new Set<PublicResourceName>();
@@ -221,17 +244,6 @@ export function StoreProvider({ children }: {children: React.ReactNode;}) {
       }));
     };
 
-    // Shoppers always see the curated catalog when the live store has nothing published yet
-    // (or cannot be read). Admins always see the exact live records so edits stay accurate.
-    const applyCuratedFallback = (resource: PublicResourceName): boolean => {
-      if (isAdmin) return false;
-      if (resource === 'products') setProducts(initialProducts);else
-      if (resource === 'categories') setCategories(initialCategories);else
-      if (resource === 'heroSlides') setHeroSlides(initialHeroSlides);else
-      return false;
-      return true;
-    };
-
     const onError = (resource: PublicResourceName) => (failure: FirestoreReadFailure) => {
       const connectionFailure = ['unavailable', 'deadline-exceeded', 'resource-exhausted'].includes(failure.diagnostic.code);
       const state: PublicResourceStatus['state'] = failure.diagnostic.code === 'permission-denied' ?
@@ -242,12 +254,10 @@ export function StoreProvider({ children }: {children: React.ReactNode;}) {
       diagnostics.set(resource, failure);
       completed.delete(resource);
       cached.delete(resource);
-      const curated = applyCuratedFallback(resource);
+      // Preserve a provisional public display, but never replace an error with demo inventory.
       setResourceStatuses((current) => ({
         ...current,
-        [resource]: curated ?
-        { state: 'ready', message: 'The curated collection is shown while the live store is unavailable.' } :
-        { state, message: failure.message, diagnostic: failure.diagnostic }
+        [resource]: { state, message: failure.message, diagnostic: failure.diagnostic }
       }));
       refreshBackendStatus();
     };
@@ -272,13 +282,13 @@ export function StoreProvider({ children }: {children: React.ReactNode;}) {
     { filters: [], orderBy: [], authentication } :
     { ...publicQueryDescriptions[resource], authentication };
 
-    unsubscribes.push(subscribeCollection<unknown>(db, 'products', isAdmin ? [] : publicQueries.products, descriptor('products'), (snapshot) => {const curated = !isAdmin && snapshot.data.length === 0;if (shouldApply('products', snapshot.fromCache)) setProducts(curated ? initialProducts : snapshot.data.map(normalizeProduct).sort(compareByUpdatedDesc));updateStatus('products', curated ? initialProducts.length : snapshot.data.length, snapshot.fromCache, snapshot.hasPendingWrites);}, onError('products')));
-    unsubscribes.push(subscribeCollection<Category>(db, 'categories', isAdmin ? [] : publicQueries.categories, descriptor('categories'), (snapshot) => {const curated = !isAdmin && snapshot.data.length === 0;if (shouldApply('categories', snapshot.fromCache)) setCategories(curated ? initialCategories : [...snapshot.data].sort((a, b) => a.displayOrder - b.displayOrder));updateStatus('categories', curated ? initialCategories.length : snapshot.data.length, snapshot.fromCache, snapshot.hasPendingWrites);}, onError('categories')));
-    unsubscribes.push(subscribeCollection<HeroSlide>(db, 'heroSlides', isAdmin ? [] : publicQueries.heroSlides, descriptor('heroSlides'), (snapshot) => {const curated = !isAdmin && snapshot.data.length === 0;if (shouldApply('heroSlides', snapshot.fromCache)) setHeroSlides(curated ? initialHeroSlides : [...snapshot.data].sort((a, b) => a.order - b.order));updateStatus('heroSlides', curated ? initialHeroSlides.length : snapshot.data.length, snapshot.fromCache, snapshot.hasPendingWrites);}, onError('heroSlides')));
+    unsubscribes.push(subscribeCollection<unknown>(db, 'products', isAdmin ? [] : publicQueries.products, descriptor('products'), (snapshot) => {const data = snapshot.data.map(normalizeProduct).sort(compareByUpdatedDesc);if (shouldApply('products', snapshot.fromCache)) setProducts(data);if (!isAdmin && !snapshot.fromCache && !snapshot.hasPendingWrites) writeCatalogDisplayCache(projectId, 'products', data);updateStatus('products', data.length, snapshot.fromCache, snapshot.hasPendingWrites);}, onError('products')));
+    unsubscribes.push(subscribeCollection<Category>(db, 'categories', isAdmin ? [] : publicQueries.categories, descriptor('categories'), (snapshot) => {const data = [...snapshot.data].sort((a, b) => a.displayOrder - b.displayOrder);if (shouldApply('categories', snapshot.fromCache)) setCategories(data);if (!isAdmin && !snapshot.fromCache && !snapshot.hasPendingWrites) writeCatalogDisplayCache(projectId, 'categories', data);updateStatus('categories', data.length, snapshot.fromCache, snapshot.hasPendingWrites);}, onError('categories')));
+    unsubscribes.push(subscribeCollection<HeroSlide>(db, 'heroSlides', isAdmin ? [] : publicQueries.heroSlides, descriptor('heroSlides'), (snapshot) => {const data = [...snapshot.data].sort((a, b) => a.order - b.order);if (shouldApply('heroSlides', snapshot.fromCache)) setHeroSlides(data);if (!isAdmin && !snapshot.fromCache && !snapshot.hasPendingWrites) writeCatalogDisplayCache(projectId, 'heroSlides', data);updateStatus('heroSlides', data.length, snapshot.fromCache, snapshot.hasPendingWrites);}, onError('heroSlides')));
     unsubscribes.push(subscribeCollection<PromoPopup>(db, 'popups', isAdmin ? [] : publicQueries.popups, descriptor('popups'), (snapshot) => {if (shouldApply('popups', snapshot.fromCache)) setPopups(snapshot.data);updateStatus('popups', snapshot.data.length, snapshot.fromCache, snapshot.hasPendingWrites);}, onError('popups')));
     unsubscribes.push(subscribeCollection<CmsPage>(db, 'cmsPages', isAdmin ? [] : publicQueries.cmsPages, descriptor('cmsPages'), (snapshot) => {if (shouldApply('cmsPages', snapshot.fromCache)) setCmsPages(snapshot.data);updateStatus('cmsPages', snapshot.data.length, snapshot.fromCache, snapshot.hasPendingWrites);}, onError('cmsPages')));
     unsubscribes.push(subscribeCollection<PaymentMethodConfig>(db, 'paymentMethodsPublic', isAdmin ? [] : publicQueries.paymentMethodsPublic, descriptor('paymentMethodsPublic'), (snapshot) => {if (shouldApply('paymentMethodsPublic', snapshot.fromCache)) setPaymentMethods(snapshot.data);updateStatus('paymentMethodsPublic', snapshot.data.length, snapshot.fromCache, snapshot.hasPendingWrites);}, onError('paymentMethodsPublic')));
-    unsubscribes.push(subscribePublicDocument<BrandSettings>(db, 'siteSettings', 'public', authentication, (snapshot) => {if (snapshot.data && shouldApply('siteSettings', snapshot.fromCache)) setBrandSettings({ ...initialBrandSettings, ...snapshot.data });updateStatus('siteSettings', snapshot.data ? 1 : 0, snapshot.fromCache, snapshot.hasPendingWrites);}, onError('siteSettings')));
+    unsubscribes.push(subscribePublicDocument<BrandSettings>(db, 'siteSettings', 'public', authentication, (snapshot) => {if (snapshot.data && shouldApply('siteSettings', snapshot.fromCache)) setBrandSettings({ ...initialBrandSettings, ...snapshot.data });if (!isAdmin && snapshot.data && !snapshot.fromCache && !snapshot.hasPendingWrites) writeCatalogDisplayCache(projectId, 'siteSettings', snapshot.data);updateStatus('siteSettings', snapshot.data ? 1 : 0, snapshot.fromCache, snapshot.hasPendingWrites);}, onError('siteSettings')));
 
     const onAdminError = (message: string) => setBackendStatus({ state: navigator.onLine ? 'error' : 'offline', message, hasPendingWrites: false });
     if (isAdmin) {
@@ -289,7 +299,7 @@ export function StoreProvider({ children }: {children: React.ReactNode;}) {
       setAccountingPeriods([]);
     }
     return () => unsubscribes.forEach((unsubscribe) => unsubscribe());
-  }, [adminAuthState, demoMode, isAdmin]);
+  }, [demoMode, isAdmin, projectId]);
 
   useEffect(() => {
     if (!products.length || !cart.length) return;
