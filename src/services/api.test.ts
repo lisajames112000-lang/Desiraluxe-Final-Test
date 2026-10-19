@@ -38,8 +38,9 @@ describe('apiRequest', () => {
       init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
     }));
     const request = apiRequest('/api/example', { method: 'POST' }, false, isWriteAcknowledgement, 25);
+    const rejection = expect(request).rejects.toMatchObject({ status: 0, message: expect.stringContaining('timed out') });
     await vi.advanceTimersByTimeAsync(25);
-    await expect(request).rejects.toMatchObject({ status: 0, message: expect.stringContaining('timed out') });
+    await rejection;
   });
 
   it('returns only a validated authoritative acknowledgement', async () => {
