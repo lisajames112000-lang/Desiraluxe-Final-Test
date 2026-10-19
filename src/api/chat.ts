@@ -72,7 +72,10 @@ export default async function chat(request: VercelRequest, response: VercelRespo
  if (request.method !== 'POST') { response.setHeader('Allow','POST'); return response.status(405).json({error:'Method not allowed.'}); }
  if (!sameOrigin(request)) return response.status(403).json({error:'A same-origin request is required.'});
  try {
-  if (Object.keys(request.query).length || !/^application\/json(?:;|$)/i.test(request.headers['content-type'] || '')) fail(400,'Send a JSON request without query parameters.');
+  // Vercel rewrites may add internal route captures to request.query.
+  // All chat input and capabilities are parsed exclusively from the strict JSON body.
+  if (['token','threadId','action','orderAccessToken'].some(key => Object.prototype.hasOwnProperty.call(request.query,key))) fail(400,'Chat access belongs in the JSON body, not the URL.');
+  if (!/^application\/json(?:;|$)/i.test(request.headers['content-type'] || '')) fail(400,'Send an application/json request.');
   if (Number(request.headers['content-length'] || 0) > CHAT_LIMITS.bodyBytes || Buffer.byteLength(JSON.stringify(request.body) || '') > CHAT_LIMITS.bodyBytes) fail(413,'Request is too large.');
   const input = chatRequestSchema.parse(request.body); const db = adminDb(); const ipKey = hashIdentifier(requestIp(request));
   await enforceRateLimit(`chat:ip:${ipKey}`,120,60);
