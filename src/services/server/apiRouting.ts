@@ -1,5 +1,6 @@
 // Existing URL contracts, shared by the one Vercel entry point and tests.
 export const apiRoutePaths = [
+  "chat",
   "admin/accounting/periods",
   "admin/bootstrap",
   "admin/content/delete",

@@ -1,0 +1,28 @@
+name: Verify storefront and support
+
+on:
+  push:
+    branches: [main, feature/live-support]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Run all unit tests
+        run: npm test
+      - name: Typecheck and build
+        run: npm run build

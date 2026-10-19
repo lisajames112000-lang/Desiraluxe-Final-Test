@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button, Divider, Text } from '@mantine/core';
-import { CreditCardIcon, FileTextIcon, HistoryIcon, ImageIcon, InboxIcon, KeyRoundIcon, LayoutDashboardIcon, LogOutIcon, MegaphoneIcon, PackageIcon, SettingsIcon, ShoppingBagIcon, TagsIcon } from 'lucide-react';
+import { CreditCardIcon, FileTextIcon, HistoryIcon, ImageIcon, InboxIcon, KeyRoundIcon, LayoutDashboardIcon, MessageCircleIcon, LogOutIcon, MegaphoneIcon, PackageIcon, SettingsIcon, ShoppingBagIcon, TagsIcon } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { Logo } from '../brand/Logo';
@@ -16,6 +16,7 @@ const links = [
 ['Branding & layout', '/admin/settings', SettingsIcon],
 ['Pages & content', '/admin/content', FileTextIcon],
 ['Enquiries', '/admin/enquiries', InboxIcon],
+['Chat support', '/admin/support', MessageCircleIcon],
 ['Data & audit', '/admin/data', HistoryIcon],
 ['Account & password', '/admin/account', KeyRoundIcon]] as
 const;

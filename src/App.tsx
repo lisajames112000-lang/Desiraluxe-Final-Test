@@ -35,6 +35,7 @@ const AdminSettings = lazy(() => import('./pages/admin/AdminSettings').then((m) 
 const AdminContent = lazy(() => import('./pages/admin/AdminContent').then((m) => ({ default: m.AdminContent })));
 const AdminData = lazy(() => import('./pages/admin/AdminData').then((m) => ({ default: m.AdminData })));
 const AdminAccount = lazy(() => import('./pages/admin/AdminAccount').then((m) => ({ default: m.AdminAccount })));
+const AdminSupport = lazy(() => import('./components/support/SupportChat').then((m) => ({ default: m.AdminSupport })));
 const AdminEnquiries = lazy(() => import('./pages/admin/AdminEnquiries').then((m) => ({ default: m.AdminEnquiries })));
 
 function LoadingScreen() {
@@ -81,6 +82,7 @@ export function App() {
                   <Route path="/admin/settings" element={<AdminSettings />} />
                   <Route path="/admin/content" element={<AdminContent />} />
                   <Route path="/admin/enquiries" element={<AdminEnquiries />} />
+                  <Route path="/admin/support" element={<AdminSupport />} />
                   <Route path="/admin/data" element={<AdminData />} />
                   <Route path="/admin/account" element={<AdminAccount />} />
                 </Route>
