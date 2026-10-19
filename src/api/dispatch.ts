@@ -1,3 +1,4 @@
+import chatHandler from './chat.js';
 import receiptHandler from './orders/receipt.js';
 import handler0 from './admin/accounting/periods.js';
 import handler1 from './admin/bootstrap.js';
@@ -26,6 +27,7 @@ import { resolveApiRoute } from '../services/server/apiRouting.js';
 
 type Handler = (request: VercelRequest, response: VercelResponse) => unknown;
 const handlers: Record<string, Handler> = {
+  'chat': chatHandler,
   'admin/accounting/periods': handler0,
   'admin/bootstrap': handler1,
   'admin/content/delete': handler2,

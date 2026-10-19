@@ -1,3 +1,4 @@
+import { cleanupExpiredChatMedia } from '../chat.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import type { VercelRequest, VercelResponse } from '../../types/vercel.js';
 import { adminDb } from '../../services/firebase/adminServer.js';
@@ -61,7 +62,8 @@ export default async function handler(request: VercelRequest, response: VercelRe
         failures += 1;
       }
     }
-    return response.status(200).json({ processed: candidates.size, deleted, skipped, failures });
+    const chatMedia = await cleanupExpiredChatMedia(50);
+    return response.status(200).json({ processed: candidates.size, deleted, skipped, failures, chatMedia });
   } catch (error) {
     const failure = serverErrorMessage(error);
     return response.status(failure.status).json({ error: failure.message });
